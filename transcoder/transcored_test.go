@@ -2,7 +2,7 @@ package transcoder
 
 import (
 	"github.com/stretchr/testify/require"
-	"github.com/xfrr/goffmpeg/models"
+	"github.com/tutybukuny/goffmpeg/models"
 	"testing"
 )
 
@@ -20,7 +20,7 @@ func TestTranscoder(t *testing.T) {
 			ts := Transcoder{}
 
 			ts.SetMediaFile(&models.Mediafile{})
-			ts.SetWhiteListProtocols([]string{"file","http","https","tcp","tls"})
+			ts.SetWhiteListProtocols([]string{"file", "http", "https", "tcp", "tls"})
 
 			require.Equal(t, ts.GetCommand()[0:2], []string{"-protocol_whitelist", "file,http,https,tcp,tls"})
 		})

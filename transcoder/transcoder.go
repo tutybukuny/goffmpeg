@@ -12,18 +12,21 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xfrr/goffmpeg/ffmpeg"
-	"github.com/xfrr/goffmpeg/models"
-	"github.com/xfrr/goffmpeg/utils"
+	"github.com/tutybukuny/goffmpeg/constant"
+	"github.com/tutybukuny/goffmpeg/ffmpeg"
+	"github.com/tutybukuny/goffmpeg/models"
+	"github.com/tutybukuny/goffmpeg/utils"
 )
+
+var equalAndSpaceRe = regexp.MustCompile(`=\s+`)
 
 // Transcoder Main struct
 type Transcoder struct {
-	stdErrPipe    io.ReadCloser
-	stdStdinPipe  io.WriteCloser
-	process       *exec.Cmd
-	mediafile     *models.Mediafile
-	configuration ffmpeg.Configuration
+	stdErrPipe         io.ReadCloser
+	stdStdinPipe       io.WriteCloser
+	process            *exec.Cmd
+	mediafile          *models.Mediafile
+	configuration      ffmpeg.Configuration
 	whiteListProtocols []string
 }
 
@@ -288,13 +291,13 @@ func (t *Transcoder) Stop() error {
 }
 
 // Output Returns the transcoding progress channel
-func (t Transcoder) Output() <-chan models.Progress {
-	out := make(chan models.Progress)
+func (t Transcoder) Output() <-chan models.IProgress {
+	out := make(chan models.IProgress)
 
 	go func() {
 		defer close(out)
 		if t.stdErrPipe == nil {
-			out <- models.Progress{}
+			out <- nil
 			return
 		}
 
@@ -328,61 +331,107 @@ func (t Transcoder) Output() <-chan models.Progress {
 		scanner.Buffer(buf, bufio.MaxScanTokenSize)
 
 		for scanner.Scan() {
-			Progress := new(models.Progress)
 			line := scanner.Text()
-			if strings.Contains(line, "frame=") && strings.Contains(line, "time=") && strings.Contains(line, "bitrate=") {
-				var re = regexp.MustCompile(`=\s+`)
-				st := re.ReplaceAllString(line, `=`)
-
-				f := strings.Fields(st)
-				var framesProcessed string
-				var currentTime string
-				var currentBitrate string
-				var currentSpeed string
-
-				for j := 0; j < len(f); j++ {
-					field := f[j]
-					fieldSplit := strings.Split(field, "=")
-
-					if len(fieldSplit) > 1 {
-						fieldname := strings.Split(field, "=")[0]
-						fieldvalue := strings.Split(field, "=")[1]
-
-						if fieldname == "frame" {
-							framesProcessed = fieldvalue
-						}
-
-						if fieldname == "time" {
-							currentTime = fieldvalue
-						}
-
-						if fieldname == "bitrate" {
-							currentBitrate = fieldvalue
-						}
-						if fieldname == "speed" {
-							currentSpeed = fieldvalue
-						}
-					}
-				}
-
-				timesec := utils.DurToSec(currentTime)
-				dursec, _ := strconv.ParseFloat(t.MediaFile().Metadata().Format.Duration, 64)
-				//live stream check
-				if dursec != 0 {
-					// Progress calculation
-					progress := (timesec * 100) / dursec
-					Progress.Progress = progress
-				}
-				Progress.CurrentBitrate = currentBitrate
-				Progress.FramesProcessed = framesProcessed
-				Progress.CurrentTime = currentTime
-				Progress.Speed = currentSpeed
-				out <- *Progress
+			switch progressDetectType(line) {
+			case constant.Frame:
+				out <- t.frameProgress(line)
+			case constant.OpeningFile:
+				out <- t.openingFileProgress(line)
+			default:
+				out <- models.NewProgress(line)
 			}
 		}
 	}()
 
 	return out
+}
+
+func (t Transcoder) frameProgress(line string) *models.FrameProgress {
+	st := equalAndSpaceRe.ReplaceAllString(line, `=`)
+
+	p := models.NewFrameProgress()
+	f := strings.Fields(st)
+	var framesProcessed string
+	var currentTime string
+	var currentBitrate string
+	var currentSpeed string
+
+	for j := 0; j < len(f); j++ {
+		field := f[j]
+		fieldSplit := strings.Split(field, "=")
+
+		if len(fieldSplit) > 1 {
+			fieldname := strings.Split(field, "=")[0]
+			fieldvalue := strings.Split(field, "=")[1]
+
+			if fieldname == "frame" {
+				framesProcessed = fieldvalue
+			}
+
+			if fieldname == "time" {
+				currentTime = fieldvalue
+			}
+
+			if fieldname == "bitrate" {
+				currentBitrate = fieldvalue
+			}
+			if fieldname == "speed" {
+				currentSpeed = fieldvalue
+			}
+		}
+	}
+
+	timesec := utils.DurToSec(currentTime)
+	dursec, _ := strconv.ParseFloat(t.MediaFile().Metadata().Format.Duration, 64)
+	//live stream check
+	if dursec != 0 {
+		// Progress calculation
+		progress := (timesec * 100) / dursec
+		p.Progress = progress
+	}
+	p.CurrentBitrate = currentBitrate
+	p.FramesProcessed = framesProcessed
+	p.CurrentTime = currentTime
+	p.Speed = currentSpeed
+	return p
+}
+
+func (t Transcoder) openingFileProgress(line string) *models.OpeningFileProgress {
+	st := equalAndSpaceRe.ReplaceAllString(line, `=`)
+	p := models.NewOpeningFileProgress()
+	f := strings.Fields(st)
+
+	for i := range f {
+		fieldSplit := strings.Split(f[i], "=")
+		if len(fieldSplit) > 1 {
+			name := fieldSplit[0]
+			value := fieldSplit[1]
+
+			switch name {
+			case "bitrate":
+				p.Bitrate = value
+			case "speed":
+				p.Speed = value
+			}
+		} else {
+			value := fieldSplit[0]
+			if strings.Contains(value, "'") {
+				p.FilePath = value[1 : len(value)-1]
+			}
+		}
+	}
+
+	return p
+}
+
+func progressDetectType(line string) constant.ProgressType {
+	if strings.Contains(line, "frame=") && strings.Contains(line, "time=") && strings.Contains(line, "bitrate=") {
+		return constant.Frame
+	}
+	if strings.Contains(line, "Opening") && strings.Contains(line, "for writing") {
+		return constant.OpeningFile
+	}
+	return ""
 }
 
 func (t *Transcoder) closePipes() {

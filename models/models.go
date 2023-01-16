@@ -1,5 +1,11 @@
 package models
 
+import (
+	"fmt"
+
+	"github.com/tutybukuny/goffmpeg/constant"
+)
+
 type Ffmpeg struct {
 	FfmpegBinPath  string
 	FfprobeBinPath string
@@ -68,12 +74,73 @@ type Format struct {
 	Tags           Tags   `json:"tags"`
 }
 
+type IProgress interface {
+	ToString() string
+	GetType() constant.ProgressType
+}
+
 type Progress struct {
+	progressType constant.ProgressType
+	Raw          string
+}
+
+func (p *Progress) ToString() string {
+	return p.Raw
+}
+
+func (p *Progress) GetType() constant.ProgressType {
+	return p.progressType
+}
+
+func NewProgress(line string) *Progress {
+	return &Progress{progressType: constant.Raw, Raw: line}
+}
+
+type FrameProgress struct {
+	progressType    constant.ProgressType
 	FramesProcessed string
 	CurrentTime     string
 	CurrentBitrate  string
 	Progress        float64
 	Speed           string
+}
+
+func NewFrameProgress() *FrameProgress {
+	return &FrameProgress{progressType: constant.Frame}
+}
+
+func (p *FrameProgress) ToString() string {
+	return "frame=" + p.FramesProcessed + " time=" + p.CurrentTime + " bitrate=" + p.CurrentBitrate +
+		" progress=" + fmt.Sprintf("%f", p.Progress) + " speed=" + p.Speed
+}
+
+func (p *FrameProgress) GetType() constant.ProgressType {
+	return p.progressType
+}
+
+type OpeningFileProgress struct {
+	progressType constant.ProgressType
+	FilePath     string
+	WritingRate  string
+	Bitrate      string
+	Speed        string
+}
+
+func (p *OpeningFileProgress) ToString() string {
+	str := "opening '" + p.FilePath + "' for writing"
+	if p.WritingRate != "" {
+		str += "rate=" + p.WritingRate
+	}
+	str += " speed" + p.Speed
+	return str
+}
+
+func (p *OpeningFileProgress) GetType() constant.ProgressType {
+	return p.progressType
+}
+
+func NewOpeningFileProgress() *OpeningFileProgress {
+	return &OpeningFileProgress{progressType: constant.OpeningFile}
 }
 
 type Tags struct {
