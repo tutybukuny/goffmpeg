@@ -103,6 +103,7 @@ type FrameProgress struct {
 	CurrentBitrate  string
 	Progress        float64
 	Speed           string
+	FPS             string
 }
 
 func NewFrameProgress() *FrameProgress {

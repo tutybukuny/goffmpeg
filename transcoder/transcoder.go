@@ -355,6 +355,7 @@ func (t Transcoder) frameProgress(line string) *models.FrameProgress {
 	var currentTime string
 	var currentBitrate string
 	var currentSpeed string
+	var fps string
 
 	for j := 0; j < len(f); j++ {
 		field := f[j]
@@ -378,6 +379,9 @@ func (t Transcoder) frameProgress(line string) *models.FrameProgress {
 			if fieldname == "speed" {
 				currentSpeed = fieldvalue
 			}
+			if fieldname == "fps" {
+				fps = fieldvalue
+			}
 		}
 	}
 
@@ -393,6 +397,7 @@ func (t Transcoder) frameProgress(line string) *models.FrameProgress {
 	p.FramesProcessed = framesProcessed
 	p.CurrentTime = currentTime
 	p.Speed = currentSpeed
+	p.FPS = fps
 	return p
 }
 

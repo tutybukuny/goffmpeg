@@ -64,6 +64,8 @@ type Mediafile struct {
 	hlsSegmentDuration    int
 	hlsMasterPlaylistName string
 	hlsSegmentFilename    string
+	hlsFlags              []string
+	hlsSegmentType        string
 	httpMethod            string
 	httpKeepAlive         bool
 	hwaccel               string
@@ -80,6 +82,9 @@ type Mediafile struct {
 	movflags              string
 	bframe                int
 	pixFmt                string
+	filterComplex         string
+	maps                  [][]string
+	varStreamMap          string
 	rawInputArgs          []string
 	rawOutputArgs         []string
 }
@@ -312,6 +317,18 @@ func (m *Mediafile) SetHlsSegmentFilename(val string) {
 	m.hlsSegmentFilename = val
 }
 
+func (m *Mediafile) SetHlsFlags(val []string) {
+	m.hlsFlags = val
+}
+
+func (m *Mediafile) SetHlsSegmentType(val string) {
+	m.hlsSegmentType = val
+}
+
+func (m *Mediafile) SetVarStreamMap(val string) {
+	m.varStreamMap = val
+}
+
 func (m *Mediafile) SetHttpMethod(val string) {
 	m.httpMethod = val
 }
@@ -358,6 +375,17 @@ func (m *Mediafile) SetTags(val map[string]string) {
 
 func (m *Mediafile) SetBframe(v int) {
 	m.bframe = v
+}
+
+func (m *Mediafile) SetFilterComplex(val string) {
+	m.filterComplex = val
+}
+
+func (m *Mediafile) AddMap(val []string) {
+	if m.maps == nil {
+		m.maps = make([][]string, 0)
+	}
+	m.maps = append(m.maps, val)
 }
 
 func (m *Mediafile) SetRawInputArgs(args []string) {
@@ -708,11 +736,16 @@ func (m *Mediafile) ToStrCommand() []string {
 		"RawOutputArgs",
 		"OutputFormat",
 		"OutputPipe",
+		"FilterComplex",
+		"Maps",
 		"HlsListSize",
 		"HlsSegmentDuration",
 		"HlsPlaylistType",
 		"HlsMasterPlaylistName",
 		"HlsSegmentFilename",
+		"HlsFlags",
+		"HlsSegmentType",
+		"VarStreamMap",
 		"AudioFilter",
 		"VideoFilter",
 		"HttpMethod",
@@ -1109,6 +1142,20 @@ func (m *Mediafile) ObtainHlsSegmentFilename() []string {
 	}
 }
 
+func (m *Mediafile) ObtainHlsFlags() []string {
+	if len(m.hlsFlags) == 0 {
+		return nil
+	}
+	return []string{"-hls_flags", strings.Join(m.hlsFlags, "+")}
+}
+
+func (m *Mediafile) ObtainHlsSegmentType() []string {
+	if m.hlsSegmentType == "" {
+		return nil
+	}
+	return []string{"-hls_segment_type", m.hlsSegmentType}
+}
+
 func (m *Mediafile) ObtainHttpMethod() []string {
 	if m.httpMethod != "" {
 		return []string{"-method", m.httpMethod}
@@ -1170,10 +1217,10 @@ func (m *Mediafile) ObtainCompressionLevel() []string {
 func (m *Mediafile) ObtainMapMetadata() []string {
 	if m.mapMetadata != "" {
 		return []string{"-map_metadata", m.mapMetadata}
-  }
-  return nil
+	}
+	return nil
 }
-    
+
 func (m *Mediafile) ObtainEncryptionKey() []string {
 	if m.encryptionKey != "" {
 		return []string{"-hls_key_info_file", m.encryptionKey}
@@ -1198,6 +1245,33 @@ func (m *Mediafile) ObtainTags() []string {
 		return result
 	}
 	return nil
+}
+
+func (m *Mediafile) ObtainFilterComplex() []string {
+	if m.filterComplex == "" {
+		return nil
+	}
+	return []string{"-filter_complex", m.filterComplex}
+}
+
+func (m *Mediafile) ObtainMaps() []string {
+	if len(m.maps) == 0 {
+		return nil
+	}
+
+	maps := make([]string, 0, len(m.maps))
+	for i := range m.maps {
+		maps = append(maps, append([]string{"-map"}, m.maps[i]...)...)
+	}
+
+	return maps
+}
+
+func (m *Mediafile) ObtainVarStreamMap() []string {
+	if m.varStreamMap == "" {
+		return nil
+	}
+	return []string{"-var_stream_map", m.varStreamMap}
 }
 
 func (m *Mediafile) ObtainRawInputArgs() []string {
